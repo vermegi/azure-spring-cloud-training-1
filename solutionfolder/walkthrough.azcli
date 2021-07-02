@@ -1,0 +1,142 @@
+# 01
+
+az login 
+
+AZ_RESOURCE_GROUP=asc-lab
+AZ_SPRING_CLOUD_NAME=azure-spring-cloud-lab-gv
+
+az spring-cloud create \
+    -g "$AZ_RESOURCE_GROUP" \
+    -n "$AZ_SPRING_CLOUD_NAME" \
+    --enable-java-agent \
+    --sku standard 
+
+az configure --defaults group=$AZ_RESOURCE_GROUP
+az configure --defaults spring-cloud=$AZ_SPRING_CLOUD_NAME
+
+# 02
+
+curl https://start.spring.io/starter.tgz -d dependencies=web -d baseDir=simple-microservice -d bootVersion=2.3.8 -d javaVersion=1.8 | tar -xzvf -
+
+cd simple-microservice
+./mvnw spring-boot:run &
+
+kill %1
+
+az spring-cloud app create -n simple-microservice
+
+./mvnw clean package
+az spring-cloud app deploy -n simple-microservice --jar-path target/demo-0.0.1-SNAPSHOT.jar
+
+cd ..
+
+
+#05
+
+curl https://start.spring.io/starter.tgz -d dependencies=web,cloud-eureka,cloud-config-client -d baseDir=spring-cloud-microservice -d bootVersion=2.3.8 -d javaVersion=1.8 | tar -xzvf -
+
+az spring-cloud app create -n spring-cloud-microservice
+
+cd spring-cloud-microservice
+./mvnw clean package -DskipTests
+az spring-cloud app deploy -n spring-cloud-microservice --jar-path target/demo-0.0.1-SNAPSHOT.jar
+
+az spring-cloud app logs --name spring-cloud-microservice -f
+
+AppPlatformLogsforSpring
+| where AppName == "spring-cloud-microservice"
+| project TimeGenerated, Log
+| order by TimeGenerated desc
+| limit 50
+
+cd ..
+
+#06 
+
+curl https://start.spring.io/starter.tgz -d dependencies=webflux,cloud-eureka,cloud-config-client -d baseDir=city-service -d bootVersion=2.3.8 -d javaVersion=1.8 | tar -xzvf -
+
+az spring-cloud app create -n city-service
+
+cd city-service
+./mvnw clean package -DskipTests
+az spring-cloud app deploy -n city-service --jar-path target/demo-0.0.1-SNAPSHOT.jar
+cd ..
+
+
+#07
+
+az spring-cloud app create -n weather-service
+
+
+# Obtain the info on the MYSQL server in our resource group:
+MYSQL_INFO=$(az mysql server list --query '[0]')
+MYSQL_SERVERNAME=$(az mysql server list --query '[0].name' -o tsv)
+MYSQL_USERNAME="$(az mysql server list --query '[0].administratorLogin' -o tsv)@${MYSQL_SERVERNAME}"
+MYSQL_HOST="$(az mysql server list --query '[0].fullyQualifiedDomainName' -o tsv)"
+
+# Create a firewall rule to allow connections from your machine:
+MY_IP=$(curl whatismyip.akamai.com 2>/dev/null)
+az mysql server firewall-rule create \
+    --server-name $MYSQL_SERVERNAME \
+    --name "connect-from-lab" \
+    --start-ip-address "$MY_IP" \
+    --end-ip-address "$MY_IP"
+
+# Create a firewall rule to allow connections from Azure services:
+az mysql server firewall-rule create \
+    --server-name $MYSQL_SERVERNAME \
+    --name "connect-from-azure" \
+    --start-ip-address "0.0.0.0" \
+    --end-ip-address "0.0.0.0"
+
+# Create a MySQL database
+az mysql db create \
+    --name "azure-spring-cloud-training" \
+    --server-name $MYSQL_SERVERNAME
+
+# Display MySQL username (to be used in the next section)
+echo "Your MySQL username is: ${MYSQL_USERNAME}"
+
+curl https://start.spring.io/starter.tgz -d dependencies=web,data-jpa,mysql,cloud-eureka,cloud-config-client -d baseDir=weather-service -d bootVersion=2.3.8 -d javaVersion=1.8 | tar -xzvf -
+
+
+cd weather-service
+./mvnw clean package -DskipTests
+az spring-cloud app deploy -n weather-service --jar-path target/demo-0.0.1-SNAPSHOT.jar
+cd ..
+
+#08
+
+curl https://start.spring.io/starter.tgz -d dependencies=cloud-gateway,cloud-eureka,cloud-config-client -d baseDir=gateway -d bootVersion=2.3.8 -d javaVersion=1.8 | tar -xzvf -
+
+az spring-cloud app create -n gateway --is-public true
+
+
+cd gateway
+./mvnw clean package -DskipTests
+az spring-cloud app deploy -n gateway --jar-path target/demo-0.0.1-SNAPSHOT.jar
+cd ..
+
+#10
+
+cd weather-service
+./mvnw clean package -DskipTests
+az spring-cloud app deployment create --name green --app weather-service --jar-path target/demo-0.0.1-SNAPSHOT.jar
+cd ..
+
+#12
+
+curl https://start.spring.io/starter.tgz -d dependencies=cloud-feign,web,cloud-eureka,cloud-config-client -d baseDir=all-cities-weather-service -d bootVersion=2.3.8 -d javaVersion=1.8 | tar -xzvf -
+
+az spring-cloud app create -n all-cities-weather-service
+
+cd all-cities-weather-service
+./mvnw clean package -DskipTests
+az spring-cloud app deploy -n all-cities-weather-service --jar-path target/demo-0.0.1-SNAPSHOT.jar
+cd ..
+
+
+
+
+
+
